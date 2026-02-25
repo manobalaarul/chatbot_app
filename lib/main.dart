@@ -1,5 +1,12 @@
+// ── main.dart ─────────────────────────────────────────────────────────────────
+// FIX: InitDashboardEvent is fired ONLY from _AppRouter's BlocListener
+// (when AuthAuthenticated arrives). DashboardScreen.initState must NOT fire it
+// again — that caused double-init which double-registers socket callbacks and
+// starts duplicate polling timers.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'bloc/auth/auth_bloc.dart';
 import 'bloc/autoreplies/autoreplies_bloc.dart';
 import 'bloc/dashboard/dashboard_bloc.dart';
@@ -21,12 +28,10 @@ class ChatFlowApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ── DI: create services once ──────────────────────────────
-    final api    = ApiService();
+    final api = ApiService();
     final socket = SocketService();
     final session = SessionService.instance;
 
-    // Pre-load token into Dio if session exists
     if (session.token != null) api.setToken(session.token!);
 
     return MultiRepositoryProvider(
@@ -39,14 +44,14 @@ class ChatFlowApp extends StatelessWidget {
         providers: [
           BlocProvider(
             create: (ctx) => AuthBloc(
-              api:     ctx.read<ApiService>(),
-              socket:  ctx.read<SocketService>(),
+              api: ctx.read<ApiService>(),
+              socket: ctx.read<SocketService>(),
               session: ctx.read<SessionService>(),
             )..add(const CheckSessionEvent()),
           ),
           BlocProvider(
             create: (ctx) => DashboardBloc(
-              api:    ctx.read<ApiService>(),
+              api: ctx.read<ApiService>(),
               socket: ctx.read<SocketService>(),
             ),
           ),
@@ -55,17 +60,16 @@ class ChatFlowApp extends StatelessWidget {
           ),
         ],
         child: MaterialApp(
-          title:                  'ChatFlow Admin',
+          title: 'ChatFlow Admin',
           debugShowCheckedModeBanner: false,
-          theme:                  T.theme,
-          home:                   const _AppRouter(),
+          theme: T.theme,
+          home: const _AppRouter(),
         ),
       ),
     );
   }
 }
 
-// ── Router: listens to AuthBloc and navigates accordingly ──────
 class _AppRouter extends StatelessWidget {
   const _AppRouter();
 
@@ -74,7 +78,7 @@ class _AppRouter extends StatelessWidget {
     return BlocConsumer<AuthBloc, AuthState>(
       listener: (ctx, state) {
         if (state is AuthAuthenticated) {
-          // Boot dashboard when authenticated
+          // ✅ Single place InitDashboardEvent is fired
           ctx.read<DashboardBloc>().add(const InitDashboardEvent());
         }
         if (state is AuthUnauthenticated) {
@@ -85,7 +89,12 @@ class _AppRouter extends StatelessWidget {
         if (state is AuthInitial || state is AuthLoading) {
           return const Scaffold(
             backgroundColor: T.bg,
-            body: Center(child: CircularProgressIndicator(color: T.accentBlue, strokeWidth: 2)),
+            body: Center(
+              child: CircularProgressIndicator(
+                color: T.accentBlue,
+                strokeWidth: 2,
+              ),
+            ),
           );
         }
         if (state is AuthAuthenticated) {

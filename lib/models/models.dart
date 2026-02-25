@@ -66,7 +66,7 @@ class Conversation extends Equatable {
 
 // ── Message ───────────────────────────────────────────────────
 class ChatMessage extends Equatable {
-  final int?   id;
+  final String?   id;
   final String senderType; // visitor | admin | bot
   final String body;
   final DateTime createdAt;
